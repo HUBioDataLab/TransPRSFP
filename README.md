@@ -1,12 +1,22 @@
 # TransPRSFP: Machine Translation-Based Protein Region-Specific Function Prediction
 
 
-Knowledge regarding the functions carried out by proteins are essential to understand biological mechanisms and to enable effective disease research. The gene ontology (GO) system is utilised for annotating gene/protein functions. Proteins are modular and composed of structural and functional blocks called domains. Many proteins are multi-domain, which have multiple functions. These functions are localised to certain regions on the sequence/structure. The existing research on protein function prediction focuses on protein level annotations (i.e., predicting a function for the whole sequence), ignoring which part of the protein is responsible for the function of interest. The aim of this study is to develop a deep learning-based method to predict protein functions at the residue level, as well as protein level. Protein level predictions are conducted by our classification model which takes [ProtT5-XL-UniRef50](https://github.com/agemagician/ProtTrans) language model embeddings of protein sequences as input and predicts their GO term-basedfunctions via running them through a series of linear layers (feed forward network) (Figure 1A). For residue level (region specific) predictions, which constitutes our main novelty, we adopted the machine translation approach in natural language processing and utilised transformer decoder blocks which takes ProtT5_XL sequence embeddings (i.e., input sentences in the source language) at the residue level together with GO term embeddings (i.e., sentences in the target language) and predicts a GO term for each input residue, meaning that the residue of interest belong to a region which carries out the predicted function (Figure 1B). Finally, we created a hybrid model that directly merges predictions from both models (Figure 1C). As training and test datasets, we employed protein level GO annotations from UniProt-GOA and residue/domain level annotations from InterPro. Considering model test performances (in terms of average F1-score); residue-level, protein- level, and merged models achieved 0.53, 0.38, and 0.47, respectively. Protein level model had a higher performance; however, adding residue level estimations increased both the coverage and the specificity of predictions.
+It is essential to know the functions of proteins to comprehend biological mechanisms and to make effective biomedical research possible. Although Gene Ontology (GO) serves as a common annotation methodology for gene/protein functions, manually curating them takes a considerably long time. While fine-grained domain-level GO annotations constitute a significant resource type for biomedical research, the curation of them involves much more difficulty. Moreover, existing research focuses more on protein-level annotations than on region-level annotations. Therefore, aiming primarily for the region-level annotations, we propose TransPRSFP, a transformer encoder-decoder-based model to generate region-specific GO-term annotations from primary sequences of proteins. In our proposed method, each amino acid and each GO-term is considered a token in source and target languages, respectively. As for the dataset structure, for each amino acid token, there exists either a corresponding GO-term annotation or the empty token. To create such a dataset, Protein2IPR and InterPro2GO datasets were chained together to realise the transition from amino acids to GO-term annotations at the residue level. TransPRSFP utilises the GPT-2 architecture with cross-attention layers, successfully capturing the complex contextual relationships. It performs as many forward propagations as the length of the input protein sequence to accomplish its task (Figure 1B). The model was evaluated via comprehensive metrics, which primarily measure the accuracy of localisations, and shown to be significantly effective for regional protein function prediction, with regional and protein-level F1-score measurements averaging at more than 0.86 and 0.92, respectively (Table 1). Thus, it is promising for both protein researchers and the broader bioinformatics community.
 
-![Figure](./figure.jpg)
-**Figure.** Models developed in scope of this research; (A) the feed-forward neural network-based classification model that performs protein-level function prediction; (B) the transformer-based model that performs sequence region level function prediction; and (C) the hybrid model constitutes classification and transformer-based models together to increase function prediction coverage and specificity.
+![Figure](./figure.png)
+**Figure 1.** **(A)** Protein2IPR and InterPro2GO datasets are utilised together to generate the train-test dataset. Domain2GO predictions are also used to enrich InterPro2GO data. **(B)** The proposed architecture uses a pretrained ProtT5_XL encoder model to use as input the embeddings of an input protein sequence, performing as many forward propagations as the length of the input protein sequence.
 
-The Python script provided in this repository makes it possible to train both types of models and perform predictions using pre-trained models.
+**Table 1.** The precision, recall, F1-score, match ratio, nonempty (NE) match ratio, token-based (TB) precision, recall, F1-score, and accuracy metrics calculated as results of tests conducted on each main GO class: BP, MF, and CC.
+
+| Class | Epoch | Prec. | Recall | F1    | Match Ratio | NE Match Ratio | TB-Prec. | TB-Recall | TB-F1 | TB-Acc. |
+| :---: | :---: | :---: | :----: | :---: | :---------: | :------------: | :------: | :-------: | :---: | :-----: |
+| BP    | 101   | 0.912 | 0.890  | 0.897 | 0.860       | 0.843          | 0.828    | 0.843     | 0.829 | 0.851   |
+| MF    | 176   | 0.961 | 0.955  | 0.955 | 0.923       | 0.917          | 0.914    | 0.917     | 0.912 | 0.916   |
+| CC    | 173   | 0.924 | 0.918  | 0.920 | 0.882       | 0.854          | 0.846    | 0.854     | 0.843 | 0.879   |
+
+While precision, recall, and f1 metrics were calculated on the protein level, considering the predictions and annotations as assigned to the whole protein, the token-based counterparts of them were calculated on a token-by-token basis, which means that the predictions were evaluated on the amino acid level, focusing on the localisation performance. The match ratio was calculated by counting the number of token predictions that are predicted correctly, divided by the total number of predicted tokens, while the nonempty match ratio measures the explained ratio for the regions where the ground-truth label involves a GO-term annotation.
+
+The Python script provided in this repository makes it possible to train the proposed model and perform predictions using pre-trained models.
 
 ## Getting Started
 The recommended Python version is 3.8.10 since the script has been tested by using this version.
@@ -21,40 +31,40 @@ Then, activate the virtual environment by using the following command:
 $ source virtual_env/bin/activate
 ```
 
-After activating the virtual environment, in the directory where the requirements.txt file resides, execute the following command to install the requirements:
+After activating the virtual environment, in the directory where the requirements_torch.txt and requirements.txt files reside, execute the following commands to install the required modules (Note that you might need to modify the requirements_torch.txt file based on your CUDA version):
 
 ```bash
+$ pip install -r requirements_torch.txt
 $ pip install -r requirements.txt
 ```
 
 ## Usage
 
-The script has the following main usages:
- - Training the classification head model on non-regional datasets
- - Training the transformer model on regional datasets
- - Running a pre-trained classification head model in inference mode
- - Running a pre-trained transformer model in inference mode
- - Running a pre-trained classification head model and a pre-trained transformer model together in inference mode to produce both regional and non-regional predictions.
+The script has been developed to train and evaluate the proposed model architecture. Hence, it can be used to:
+ - Train TransPRSFP, either
+   - from scratch,
+   - from a checkpoint, i.e., a pretrained model
+- Perform inference, with/without
+   - reporting the metrics that are referred to in the abstract of the study
 
-Note: For each of the main usages specified above, the [ProtT5-XL-UniRef50](https://github.com/agemagician/ProtTrans) encoder model is needed. You can download it using the following link: [https://drive.google.com/file/d/1PnPtgdzkopjdjNS6XMLhjyS9bioMT2Kq/view?usp=sharing](https://drive.google.com/file/d/1PnPtgdzkopjdjNS6XMLhjyS9bioMT2Kq/view?usp=sharing)
+Note: The [ProtT5-XL-UniRef50](https://github.com/agemagician/ProtTrans) encoder model is required for all the usages outlined above. You can download it using the following link: [https://drive.google.com/file/d/1PnPtgdzkopjdjNS6XMLhjyS9bioMT2Kq/view?usp=sharing](https://drive.google.com/file/d/1PnPtgdzkopjdjNS6XMLhjyS9bioMT2Kq/view?usp=sharing)
 
 You can extract the encoder model folder from the archive using the following command:
 ```bash
 $ tar xvf Rostlab_prot_t5_xl_uniref50.tar.xz
 ```
 
-There is a section below for each of the main uses listed above.
-
-For seeing the usage of the script, the following command can be executed:
+To see the usage of the script, the following command can be executed:
 ```bash
 $ python3 main.py -h
 ```
 
 The output of this command is as follows:
 ```bash
-usage: main.py [-h] [-i] [-t] [-d DEVICE] -dp DATASET -mt {transformer,classification_head,merged} [-mp MODEL_PATH] -t5 PROT_T5_MODEL_PATH
-               [-th THRESHOLD] [-bs BATCH_SIZE] [-e EPOCH] [-lr LEARNING_RATE] [-msd MODEL_SAVE_DIR] [-spe SAVE_PER_EPOCH] [-ml MAX_LENGTH]
-               [-tdr TRAINING_DATASET_RATIO] [-tbld TENSORBOARD_LOG_DIR] [-chmp CLASSIFICATION_HEAD_MODEL_PATH] [-tmp TRANSFORMER_MODEL_PATH]
+usage: main.py [-h] [-i] [-t] [-d DEVICE] -dp DATASET -mt {transformer,classification_head,gpt2,merged} [-tmt {transformer,gpt2}] [-mp MODEL_PATH] -t5 PROT_T5_MODEL_PATH
+               [-th THRESHOLD] [-bs BATCH_SIZE] [-e EPOCH] [-lr LEARNING_RATE] [-msd MODEL_SAVE_DIR] [-spe SAVE_PER_EPOCH] [-ml MAX_LENGTH] [-tdr TRAINING_DATASET_RATIO]
+               [-tbld TENSORBOARD_LOG_DIR] [-chmp CLASSIFICATION_HEAD_MODEL_PATH] [-tmp TRANSFORMER_MODEL_PATH] [-rn RUN_NAME] [-gti GO_TERM_INDEX] [-lgti LOAD_GO_TERM_INDEX]
+               [-s RANDOM_SEED] [-ns] [-cfp CONTINUE_FROM_CHECKPOINT] [-gtmfp GO_TERM_METRICS_FILEPATH_PREFIX] [-cm] [-stst SAVE_TRAINING_SET_TO] [-stest SAVE_TEST_SET_TO]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -66,15 +76,16 @@ arguments:
                         the device on which the model is to run
   -dp DATASET, --dataset DATASET
                         path to dataset (must be a pickle-saved binary file)
-  -mt {transformer,classification_head,merged}, --model-type {transformer,classification_head,merged}
+  -mt {transformer,classification_head,gpt2,merged}, --model-type {transformer,classification_head,gpt2,merged}
+  -tmt {transformer,gpt2}, --transformer-model-type {transformer,gpt2}
+                        required only if the merged model is used
   -mp MODEL_PATH, --model-path MODEL_PATH
                         path to the directory where the model is saved
   -t5 PROT_T5_MODEL_PATH, --prot-t5-model-path PROT_T5_MODEL_PATH
                         path to the directory where ProtT5 model is stored
   -th THRESHOLD, --threshold THRESHOLD
-                        threshold for classification head model. The less the threshold, the more the number of false positives, but the less the
-                        number of false negatives. The more the threshold, the less the number of false positives, but the more the number of
-                        false negatives.
+                        threshold for classification head model. The less the threshold, the more the number of false positives, but the less the number of false negatives. The more
+                        the threshold, the less the number of false positives, but the more the number of false negatives.
   -bs BATCH_SIZE, --batch-size BATCH_SIZE
                         batch size
   -e EPOCH, --epoch EPOCH
@@ -88,321 +99,149 @@ arguments:
   -ml MAX_LENGTH, --max-length MAX_LENGTH
                         the maximum length for a protein sequence. If not set, automatically inferred from the dataset
   -tdr TRAINING_DATASET_RATIO, --training-dataset-ratio TRAINING_DATASET_RATIO
-                        the ratio of the number of samples in training data to the number of samples in all dataset (must be between 0 and 1, 0
-                        and 1 excluded)
+                        the ratio of the number of samples in training data to the number of samples in all dataset (must be between 0 and 1, 0 and 1 excluded)
   -tbld TENSORBOARD_LOG_DIR, --tensorboard-log-dir TENSORBOARD_LOG_DIR
                         the folder where the tensorboard logs are to be saved (must be non-existent)
   -chmp CLASSIFICATION_HEAD_MODEL_PATH, --classification-head-model-path CLASSIFICATION_HEAD_MODEL_PATH
                         path to the classification head model (only used in merged model type)
   -tmp TRANSFORMER_MODEL_PATH, --transformer-model-path TRANSFORMER_MODEL_PATH
                         path to the transformer model (only used in merged model type)
+  -rn RUN_NAME, --run-name RUN_NAME
+                        the name identifying this run
+  -gti GO_TERM_INDEX, --go-term-index GO_TERM_INDEX
+                        the file path to save GO term index (must be non-existent)
+  -lgti LOAD_GO_TERM_INDEX, --load-go-term-index LOAD_GO_TERM_INDEX
+  -s RANDOM_SEED, --random-seed RANDOM_SEED
+                        random seed
+  -ns, --no-random-seed
+                        if specified, no constant will be set as random seed
+  -cfp CONTINUE_FROM_CHECKPOINT, --continue-from-checkpoint CONTINUE_FROM_CHECKPOINT
+                        path to a checkpoint of the model to be trained
+  -gtmfp GO_TERM_METRICS_FILEPATH_PREFIX, --go-term-metrics-filepath-prefix GO_TERM_METRICS_FILEPATH_PREFIX
+                        the prefix of filenames to save GO term-based metrics. If not specified, a random string will be generated. This option can only be used in inference mode
+  -cm, --compute-metrics
+                        If it is given, task-specific metrics will be computed and reported. This can be used only in inference mode. If the provided dataset does not properly
+                        include the corresponding true labels, the execution will fail and terminate at an early stage
+  -stst SAVE_TRAINING_SET_TO, --save-training-set-to SAVE_TRAINING_SET_TO
+                        the path to save the training set. The specified path must be non-existent. This option can only be used in training mode
+  -stest SAVE_TEST_SET_TO, --save-test-set-to SAVE_TEST_SET_TO
+                        the path to save the test set. The specified path must be non-existent. This option can only be used in training mode
 ```
 
 ## Datasets
-- For accessing datasets that have been used for training the classification head models, the following link can be used: [https://drive.google.com/drive/folders/1HKr7rp2E84jwvJn7Eje2t9zwVL4vFcF8?usp=sharing](https://drive.google.com/drive/folders/1HKr7rp2E84jwvJn7Eje2t9zwVL4vFcF8?usp=sharing)
-
-- For accessing datasets that have been used for training the transformer models, the following link can be used: [https://drive.google.com/drive/folders/1M255UK-H72NCNrryh-UvdDGRXCXt_slJ?usp=sharing](https://drive.google.com/drive/folders/1M255UK-H72NCNrryh-UvdDGRXCXt_slJ?usp=sharing)
-
-
+- In order to access the datasets that have been used to train the TransPRSFP, the following link can be used: [https://drive.google.com/drive/folders/1nc6t26bOn_ghUX8nHctAP8bZ1qIOEbJv?usp=sharing](https://drive.google.com/drive/folders/1nc6t26bOn_ghUX8nHctAP8bZ1qIOEbJv?usp=sharing)
 
 
 ## Models
-- For accessing pre-trained classification head models, the following link can be used: [https://drive.google.com/drive/folders/1gRi7TBrwZfnfvXU21vtj8s5F4z5D9pXM?usp=sharing](https://drive.google.com/drive/folders/1gRi7TBrwZfnfvXU21vtj8s5F4z5D9pXM?usp=sharing)
-
-- For accessing pre-trained transformer models, the following link can be used: [https://drive.google.com/drive/folders/1ey8pZufHIV3bQAWjJ8yGnWABGkjFp4ta?usp=sharing](https://drive.google.com/drive/folders/1ey8pZufHIV3bQAWjJ8yGnWABGkjFp4ta?usp=sharing)
+- In order to access the pre-trained models, the following link can be used: [https://drive.google.com/drive/folders/1S5pxEx0fXqB7lgSW8QFV5pwWyFAWFJbm?usp=sharing](https://drive.google.com/drive/folders/1S5pxEx0fXqB7lgSW8QFV5pwWyFAWFJbm?usp=sharing)
 
 ## Dataset Format
  - This script uses the datasets prepared in a specific format and saved as a binary object file using the pickle module.
  - Below, sample datasets consisting of toy examples are given for illustrating the required dataset formats. For viewing the dataset(s), you should download it and use the built-in pickle module in Python as follows (You can first open a Python shell and execute the following lines):
    ```python
    >>> import pickle
-   >>> with open("test_nonregional_dataset.pkl", "rb") as f:
+   >>> with open("test_annotated_dataset.pkl", "rb") as f:
    >>>     dataset = pickle.load(f)
    >>> dataset
    ```
- - To examine the dataset format for training the classification head model, please use the following link: [test_nonregional_dataset.pkl](https://drive.google.com/file/d/1ycVX-Lx7rOmfoeZVwXAN72dMW-PqoblU/view?usp=sharing)
- - To examine the dataset format for training the transformer model, please use the following link: [test_regional_dataset.pkl](https://drive.google.com/file/d/1WyTfAkS_fXHclplaeOvxY7cW2WhP7_PQ/view?usp=sharing)
- - To examine the dataset format for running the model(s) in inference mode, please use the following link: [test_dataset.pkl](https://drive.google.com/file/d/1jeIiiYzPGLs-OL6_m1e5aVpThR6A2JPT/view?usp=sharing). Note that the formats of the dataset files named as test_nonregional_dataset.pkl and test_regional_dataset.pkl are also applicable for running the model(s) in inference mode. In the case where the GO term annotations are not known, the format of the file test_dataset.pkl must be used.
+ - To examine the dataset format for training the model, please use the following link: [test_annotated_dataset.pkl](https://drive.google.com/file/d/1KANwdXEeaCJ32kR93p9OW7JeJlvlGPJm/view?usp=sharing)
+ - To examine the dataset format for running the model in inference mode, please use the following link: [test_dataset.pkl](https://drive.google.com/file/d/18XZn3gH-NWcEGPi-CUObHy02Hy8u-AqC/view?usp=sharing). Note that the format of the dataset file named as test_annotated_dataset.pkl is also applicable for running the model(s) in inference mode, and compulsory if the metrics are to be computed. In the case where the GO term annotations are not known, the format of the file test_dataset.pkl must be used.
 
-For getting acquainted with the usage of the script, it is recommended that you download the sample datasets specified above and use them to test the script by using the commands specified below.
+To get acquainted with the usage of the script, it is recommended that you download the sample datasets specified above and use them to test the script by using the commands specified below.
 
-## Using the Script to Train the Classification Head Model
+## Using the Script to Train the Model from Scratch
 
-A sample command for using the script to train the classification head model is as follows:
+A sample command for using the script to train the model from scratch is as follows:
 ```bash
-$ python3 main.py --train --device cuda:0 --dataset ../test_nonregional_dataset.pkl --model-type classification_head -t5 ../Rostlab_prot_t5_xl_uniref50 --model-save-dir ../classification_head_model_test --batch-size 8 --epoch 150 --learning-rate 0.005 --training-dataset-ratio 0.8
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --train --device cuda --dataset ../test_annotated_dataset.pkl --model-type gpt2 -t5 ../Rostlab_prot_t5_xl_uniref50 --model-save-dir ../transprsfp_training_test --go-term-index ../transprsfp_training_test_go_term_index.pkl --batch-size 24 --epoch 150 --learning-rate 0.00001 --training-dataset-ratio 0.8 --max-length 1000
 ```
 
-Executing this script by using the command above means that the **classification head** model will be **trained**
- - by using the device **cuda:0**
- - on the dataset found at relative path **../test_nonregional_dataset.pkl**
- - by using the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50**
- - by saving the model at relative path **../classification_head_model_test** at the end of the training
- - by using the batch size as **8**
- - for **150** epochs
- - by using the learning rate as **0.005**
- - by using **80%** of the dataset as the training set, while the rest being the validation set.
+Executing this script by using the command above means that the **gpt2-based** model will be **trained** according to the following specifications:
+ - the device **cuda:0** will be utilised throughout the training
+ - the dataset found at relative path **../test_annotated_dataset.pkl** will be used
+ - the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50** will be used
+ - the model will be saved at relative path **../transprsfp_training_test** per epoch (note that the saved model will be overwritten at each time the new checkpoint is saved). Also, tensorboard logs of the training are regularly saved at the **../transprsfp_training_test/runs** directory
+ - the batch size **24** will be applied
+ - the training will last for **150** epochs
+ - the learning rate is **0.00001** (note that the linear learning rate decay is applied)
+ - **80%** of the dataset will be used as the training set, while the rest being the test set.
+ - the protein sequences will be truncated to a maximum of **1000** amino acids in length.
 
-## Using the Script to Train the Transformer Model
-
-A sample command for using the script to train the transformer model is as follows:
-
+To train the model on the biological process dataset from scratch by using the same parameters as those that are used in scope of this research for, e.g., 150 epochs, the following command can be executed:
 ```bash
-$ python3 main.py --train --device cuda:0 --dataset ../test_regional_dataset.pkl -mt transformer -t5 ../Rostlab_prot_t5_xl_uniref50 --model-save-dir ../transformer_model_test --batch-size 8 --epoch 150 --learning-rate 0.05 --training-dataset-ratio 0.8 --tensorboard-log-dir ../transformer_model_test_tensorboard
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --train --device cuda --dataset ../datasets/bp.pkl --model-type gpt2 -t5 ../Rostlab_prot_t5_xl_uniref50 --model-save-dir ../transprsfp_bp --go-term-index ../transprsfp_bp_go_term_index.pkl --batch-size 24 --epoch 150 --learning-rate 0.00001 --training-dataset-ratio 0.95 --max-length 1000
 ```
+Note that you might need to decrease the batch size depending on your GPU's available memory amount. The training can also be performed on CPU by specifying the **--device** as **cpu**. However, this would take much longer time, and thus, is not recommended.
 
-Executing this script by using the command above means that the **transformer** model will be **trained**
- - by using the device **cuda:0**
- - on the dataset found at relative path **../test_regional_dataset.pkl**
- - by using the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50**
- - by saving the model at relative path **../transformer_model_test** at the end of the training
- - by using the batch size as **8**
- - for **150** epochs
- - by using the learning rate as **0.05**
- - by using **80%** of the dataset as the training set, while the rest being the validation set
- - by saving tensorboard logs during training to the relative path **../transformer_model_test_tensorboard**
 
-## Using the Script to Run the Classification Head Model in Inference Mode
+## Using the Script to Train the Model from a Checkpoint
 
-A sample command for using the script to run the classification head model in inference mode is as follows:
-
+A sample command for using the script to train the model from a checkpoint is as follows:
 ```bash
-$ python3 main.py --inference --model-type classification_head --model-path ../classification_head_model_test/end_of_training/ --threshold 0.20 --device cuda:0 -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../test_dataset.pkl
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --train --device cuda --dataset ../test_annotated_dataset.pkl --model-type gpt2 -t5 ../Rostlab_prot_t5_xl_uniref50 --model-save-dir ../transprsfp_training_test_continued --continue-from-checkpoint ../transprsfp_training_test/checkpoint-10/ --load-go-term-index ../transprsfp_training_test_go_term_index.pkl --batch-size 24 --epoch 150 --learning-rate 0.00001 --training-dataset-ratio 0.8 --max-length 1000
 ```
 
-Using the command above means that the **classification head** model found at relative path **../classification_head_model_test/end_of_training/** will be executed in **inference** mode
- - by using the device **cuda:0**
- - by using the threshold **0.20**
- - by using the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50**
- - on the dataset found at relative path **../test_dataset.pkl** 
+Executing this script by using the command above means that the **gpt2-based** model will be **trained** according to the following specifications:
+ - the device **cuda:0** will be utilised throughout the training
+ - the dataset found at relative path **../test_annotated_dataset.pkl** will be used
+ - the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50** will be used
+ - the model will be saved at relative path **../transprsfp_training_test_continued** per epoch (note that the saved model will be overwritten at each time the new checkpoint is saved). Also, tensorboard logs of the training are regularly saved at the **../transprsfp_training_test_continued/runs** directory
+ - the training will start from the checkpoint saved at the relative path ../transprsfp_training_test/checkpoint-10/, and the GO-term index of the checkpoint model is at the relative path ../transprsfp_training_test_go_term_index.pkl
+ - the batch size **24** will be applied
+ - the training will last for **150** epochs
+ - the learning rate is **0.00001** (note that the linear learning rate decay is applied)
+ - **80%** of the dataset will be used as the training set, while the rest being the test set.
+ - the protein sequences will be truncated to a maximum of **1000** amino acids in length.
 
-The sample outputs produced by the command above is as follows:
+To continue training the model on the biological process dataset from a checkpoint, i.e., the provided pre-trained model for the BP category, by using the same parameters as those that are used in scope of this research for, e.g., 150 epochs, the following command can be executed:
+```bash
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --train --device cuda --dataset ../datasets/bp/bp.pkl --model-type gpt2 -t5 ../Rostlab_prot_t5_xl_uniref50 --model-save-dir ../transprsfp_bp_continued --continue-from-checkpoint ../transprsfp_bp/ --load-go-term-index ../transprsfp_bp/go_term_index.pkl --batch-size 24 --epoch 150 --learning-rate 0.00001 --training-dataset-ratio 0.95 --max-length 1000
 ```
-2023-06-17 07:04:57.145896: Loading ProtT5 tokenizer...
-2023-06-17 07:04:57.716089: Done!
-2023-06-17 07:04:57.716139: Loading ProtT5 encoder...
-2023-06-17 07:05:09.797326: Done!
-2023-06-17 07:05:09.797427: Loading classification model...
-2023-06-17 07:05:17.368933: Done!
-2023-06-17 07:05:18.234049: G: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009
-2023-06-17 07:05:18.257649: QDRSMEN: GO:0000002 GO:0000004 GO:0000008
-2023-06-17 07:05:18.280082: WLQT: GO:0000001 GO:0000003 GO:0000004 GO:0000009
-2023-06-17 07:05:18.302514: W: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 07:05:18.324971: KRD: GO:0000004 GO:0000009 GO:0000010
-2023-06-17 07:05:18.347703: EVHGMEKGMI: GO:0000002 GO:0000003 GO:0000004 GO:0000007 GO:0000010
-2023-06-17 07:05:18.371884: HKSTVWS: GO:0000001 GO:0000002 GO:0000004 GO:0000009 GO:0000010
-2023-06-17 07:05:18.394303: DSTILAC: GO:0000003 GO:0000004 GO:0000009 GO:0000010
-2023-06-17 07:05:18.419012: MEQGECPLMR: GO:0000002 GO:0000003 GO:0000004 GO:0000005 GO:0000006 GO:0000008 GO:0000010
-2023-06-17 07:05:18.441450: AK: GO:0000002 GO:0000003 GO:0000004 GO:0000009 GO:0000010
-2023-06-17 07:05:18.463799: FMAVREVLGH: GO:0000001 GO:0000004 GO:0000010
-2023-06-17 07:05:18.486209: DALIDHWW: GO:0000003 GO:0000004 GO:0000007 GO:0000009 GO:0000010
-2023-06-17 07:05:18.512298: QTQYN: GO:0000002 GO:0000004 GO:0000007 GO:0000008
-2023-06-17 07:05:18.534839: G: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009
-2023-06-17 07:05:18.557256: IQLHWCAAA: GO:0000003 GO:0000004 GO:0000006 GO:0000009 GO:0000010
-2023-06-17 07:05:18.579784: T: GO:0000001 GO:0000004 GO:0000009
-2023-06-17 07:05:18.603728: TGERVTPM: GO:0000003 GO:0000004 GO:0000007 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 07:05:18.625935: MITP: GO:0000001 GO:0000002 GO:0000003 GO:0000004 GO:0000005
-2023-06-17 07:05:18.651647: LYDF: GO:0000003 GO:0000004 GO:0000010
-2023-06-17 07:05:18.675184: LDGNCHFL: GO:0000002 GO:0000004 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 07:05:18.698682: P: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009
-2023-06-17 07:05:18.721636: DAHF: GO:0000001 GO:0000002 GO:0000003 GO:0000004 GO:0000005 GO:0000007 GO:0000009
-2023-06-17 07:05:18.745697: MCWDIS: GO:0000002 GO:0000003 GO:0000005 GO:0000006 GO:0000010
-2023-06-17 07:05:18.770178: RGM: GO:0000003 GO:0000004 GO:0000005 GO:0000007 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 07:05:18.794179: NNTHNH: GO:0000004 GO:0000007 GO:0000008 GO:0000010
-2023-06-17 07:05:18.816725: ML: GO:0000002 GO:0000003 GO:0000005 GO:0000006 GO:0000008 GO:0000010
-2023-06-17 07:05:18.838899: YYCGCHIG: GO:0000001 GO:0000002 GO:0000010
-2023-06-17 07:05:18.861319: KVLTI: GO:0000004 GO:0000005 GO:0000007 GO:0000010
-2023-06-17 07:05:18.883900: R: GO:0000001 GO:0000004 GO:0000005 GO:0000009 GO:0000010
-2023-06-17 07:05:18.908037: VNY: GO:0000002 GO:0000003 GO:0000004
-2023-06-17 07:05:18.931543: LPN: GO:0000003 GO:0000004 GO:0000008
-2023-06-17 07:05:18.954073: TKGPNDNA: GO:0000003 GO:0000004 GO:0000009
-```
+Note that you might need to decrease the batch size depending on your GPU's available memory amount. The training can also be performed on CPU by specifying the **--device** as **cpu**. However, this would take much longer time, and thus, is not recommended.
 
-## Using the Script to Run the Transformer Model in Inference Mode
+## Using the Script to Perform Inference
 
-A sample command for using the script to run the transformer model in inference mode is as follows:
+A sample command for using the script to perform inference, i.e., predict residue-level GO-term annotations, is as follows:
 
 ```bash
-$ python3 main.py --inference --model-type transformer --model-path ../transformer_model_test/embed_size_1024.max_length_10000.lr_0.05_end_of_training/ --device cuda:0 -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../test_dataset.pkl
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --inference --device cuda --model-type gpt2 --model-path ../transprsfp_training_test/checkpoint-10/ --load-go-term-index ../transprsfp_training_test_go_term_index.pkl -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../test_dataset.pkl
 ```
 
-Using the command above means that the **transformer** model found at relative path **../transformer_model_test/embed_size_1024.max_length_10000.lr_0.05_end_of_training/** will be executed in **inference** mode
- - by using the device **cuda:0**
- - by using the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50**
- - on the dataset found at relative path **../test_dataset.pkl** 
+Executing this script by using the command above means that the **gpt2-based** model found at relative path **../transprsfp_training_test/checkpoint-10/** will be **run** in **inference** mode according to the following specifications:
+ - the device **cuda:0** will be utilised
+ - the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50** will be used
+ - inference will be performed on the dataset found at relative path **../test_dataset.pkl**
 
-The sample outputs produced by the command above is as follows:
-```
-2023-06-17 07:19:01.558596: Loading ProtT5 tokenizer...
-2023-06-17 07:19:02.127968: Done!
-2023-06-17 07:19:02.128011: Loading ProtT5 encoder...
-2023-06-17 07:19:14.677408: Done!
-2023-06-17 07:19:14.677520: Loading transformer model...
-2023-06-17 07:19:24.017840: Done!
-2023-06-17 07:19:24.866646: G: go:0000010: [[1, 1]] |
-2023-06-17 07:19:25.115701: QDRSMEN: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 07:19:25.261224: WLQT: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 07:19:25.319535: W: go:0000010: [[1, 1]] |
-2023-06-17 07:19:25.442572: KRD: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 07:19:25.770543: EVHGMEKGMI: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4], [9, 9]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] | go:0000002: [[10, 10]] |
-2023-06-17 07:19:26.017410: HKSTVWS: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 07:19:26.260670: DSTILAC: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 07:19:26.611310: MEQGECPLMR: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4], [9, 9]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] | go:0000002: [[10, 10]] |
-2023-06-17 07:19:26.708792: AK: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] |
-2023-06-17 07:19:27.036395: FMAVREVLGH: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [10, 10]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7], [9, 9]] |
-2023-06-17 07:19:27.318858: DALIDHWW: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7]] |
-2023-06-17 07:19:27.491839: QTQYN: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] |
-2023-06-17 07:19:27.546176: G: go:0000010: [[1, 1]] |
-2023-06-17 07:19:27.854804: IQLHWCAAA: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7], [9, 9]] |
-2023-06-17 07:19:27.918508: T: go:0000010: [[1, 1]] |
-2023-06-17 07:19:28.178690: TGERVTPM: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 07:19:28.328460: MITP: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 07:19:28.492370: LYDF: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 07:19:28.756567: LDGNCHFL: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 07:19:28.811352: P: go:0000010: [[1, 1]] |
-2023-06-17 07:19:28.973147: DAHF: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 07:19:29.186490: MCWDIS: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] |
-2023-06-17 07:19:29.299019: RGM: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 07:19:29.514377: NNTHNH: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] |
-2023-06-17 07:19:29.612899: ML: go:0000010: [[1, 1]] | go:0000009: [[2, 2]] |
-2023-06-17 07:19:29.876089: YYCGCHIG: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 07:19:30.055239: KVLTI: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] |
-2023-06-17 07:19:30.120135: R: go:0000010: [[1, 1]] |
-2023-06-17 07:19:30.238388: VNY: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 07:19:30.349400: LPN: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 07:19:30.612022: TKGPNDNA: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7]] |
-```
-
-## Using the Script to Run the Merged Model in Inference Mode
-
-A sample command for using the script to run the merged model in inference mode is as follows:
-
+Also, the metrics can be computed by using the **--compute-metrics** switch:
 ```bash
-$ python3 main.py --inference --model-type merged --transformer-model-path ../transformer_model_test/embed_size_1024.max_length_10000.lr_0.05_end_of_training/ --classification-head-model-path ../classification_head_model_test/end_of_training/ --threshold 0.20 --device cuda:0 -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../test_dataset.pkl
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --inference --device cuda --model-type gpt2 --model-path ../transprsfp_training_test/checkpoint-10/ --load-go-term-index ../transprsfp_training_test_go_term_index.pkl -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../test_annotated_dataset.pkl --compute-metrics
+```
+Notice that the dataset being used is **../test_annotated_dataset.pkl** this time as it is necessary to provide an annotated dataset for the computation of metrics.
+
+### Reproducing the Results in Table 1
+It is possible to reproduce the results provided in Table 1 by executing the following commands for BP, MF, and CC classes, respectively. Three commands, one per GO category, will be provided below, along with their corresponding outputs in an abbreviated format.
+
+To be able to get the same results as in Table 1, you need to make sure that you have downloaded the pre-trained models from the link provided in the **Models** section and that you are providing the script with the correct paths to the models. Also, the corresponding test sets should be downloaded from the link provided in the **Datasets** section and used accordingly, taking into account the GO categories on which the inference is performed.
+
+#### Biological Process (BP)
+```bash
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --inference --device cuda --model-type gpt2 --model-path ../transprsfp_bp/ --load-go-term-index ../transprsfp_bp/go_term_index.pkl -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../datasets/bp/bp_test.pkl --max-length 1000 --compute-metrics
 ```
 
-Using the command above means that the **merged** model consisting of the classification head model found at relative path **../classification_head_model_test/end_of_training/** and the transformer model found at relative path **../transformer_model_test/embed_size_1024.max_length_10000.lr_0.05_end_of_training/** will be executed in **inference** mode
- - by using the device **cuda:0**
- - by using the T5Encoder model found at relative path **../Rostlab_prot_t5_xl_uniref50**
- - on the dataset found at relative path **../test_dataset.pkl** 
- - by using the threshold **0.20** for the classification head model.
-
-The sample outputs produced by the command above is as follows:
-
-```
-2023-06-17 04:44:08.914214: Loading ProtT5 tokenizer...
-2023-06-17 04:44:09.456218: Done!
-2023-06-17 04:44:09.456263: Loading ProtT5 encoder...
-2023-06-17 04:44:21.329711: Done!
-2023-06-17 04:44:21.334376: Loading classification model...
-2023-06-17 04:44:28.720729: Done!
-2023-06-17 04:44:29.453718: G: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009
-2023-06-17 04:44:29.472584: QDRSMEN: GO:0000002 GO:0000004 GO:0000008
-2023-06-17 04:44:29.490722: WLQT: GO:0000001 GO:0000003 GO:0000004 GO:0000009
-2023-06-17 04:44:29.509122: W: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 04:44:29.529871: KRD: GO:0000004 GO:0000009 GO:0000010
-2023-06-17 04:44:29.550302: EVHGMEKGMI: GO:0000002 GO:0000003 GO:0000004 GO:0000007 GO:0000010
-2023-06-17 04:44:29.570091: HKSTVWS: GO:0000001 GO:0000002 GO:0000004 GO:0000009 GO:0000010
-2023-06-17 04:44:29.591253: DSTILAC: GO:0000003 GO:0000004 GO:0000009 GO:0000010
-2023-06-17 04:44:29.614257: MEQGECPLMR: GO:0000002 GO:0000003 GO:0000004 GO:0000005 GO:0000006 GO:0000008 GO:0000010
-2023-06-17 04:44:29.634674: AK: GO:0000002 GO:0000003 GO:0000004 GO:0000009 GO:0000010
-2023-06-17 04:44:29.654129: FMAVREVLGH: GO:0000001 GO:0000004 GO:0000010
-2023-06-17 04:44:29.675305: DALIDHWW: GO:0000003 GO:0000004 GO:0000007 GO:0000009 GO:0000010
-2023-06-17 04:44:29.696014: QTQYN: GO:0000002 GO:0000004 GO:0000007 GO:0000008
-2023-06-17 04:44:29.715333: G: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009
-2023-06-17 04:44:29.732795: IQLHWCAAA: GO:0000003 GO:0000004 GO:0000006 GO:0000009 GO:0000010
-2023-06-17 04:44:29.750773: T: GO:0000001 GO:0000004 GO:0000009
-2023-06-17 04:44:29.773830: TGERVTPM: GO:0000003 GO:0000004 GO:0000007 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 04:44:29.791398: MITP: GO:0000001 GO:0000002 GO:0000003 GO:0000004 GO:0000005
-2023-06-17 04:44:29.809347: LYDF: GO:0000003 GO:0000004 GO:0000010
-2023-06-17 04:44:29.827405: LDGNCHFL: GO:0000002 GO:0000004 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 04:44:29.845105: P: GO:0000001 GO:0000004 GO:0000005 GO:0000008 GO:0000009
-2023-06-17 04:44:29.863337: DAHF: GO:0000001 GO:0000002 GO:0000003 GO:0000004 GO:0000005 GO:0000007 GO:0000009
-2023-06-17 04:44:29.882424: MCWDIS: GO:0000002 GO:0000003 GO:0000005 GO:0000006 GO:0000010
-2023-06-17 04:44:29.900517: RGM: GO:0000003 GO:0000004 GO:0000005 GO:0000007 GO:0000008 GO:0000009 GO:0000010
-2023-06-17 04:44:29.920050: NNTHNH: GO:0000004 GO:0000007 GO:0000008 GO:0000010
-2023-06-17 04:44:29.938037: ML: GO:0000002 GO:0000003 GO:0000005 GO:0000006 GO:0000008 GO:0000010
-2023-06-17 04:44:29.955522: YYCGCHIG: GO:0000001 GO:0000002 GO:0000010
-2023-06-17 04:44:29.973980: KVLTI: GO:0000004 GO:0000005 GO:0000007 GO:0000010
-2023-06-17 04:44:29.991912: R: GO:0000001 GO:0000004 GO:0000005 GO:0000009 GO:0000010
-2023-06-17 04:44:30.009537: VNY: GO:0000002 GO:0000003 GO:0000004
-2023-06-17 04:44:30.027109: LPN: GO:0000003 GO:0000004 GO:0000008
-2023-06-17 04:44:30.044768: TKGPNDNA: GO:0000003 GO:0000004 GO:0000009
-2023-06-17 04:44:30.438940: Loading transformer model...
-2023-06-17 04:44:34.988885: Done!
-2023-06-17 04:44:35.053637: G: go:0000010: [[1, 1]] |
-2023-06-17 04:44:35.282410: QDRSMEN: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:35.423374: WLQT: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:35.479875: W: go:0000010: [[1, 1]] |
-2023-06-17 04:44:35.591468: KRD: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:35.904460: EVHGMEKGMI: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4], [9, 9]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] | go:0000002: [[10, 10]] |
-2023-06-17 04:44:36.133502: HKSTVWS: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:36.359336: DSTILAC: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:36.672005: MEQGECPLMR: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4], [9, 9]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] | go:0000002: [[10, 10]] |
-2023-06-17 04:44:36.755867: AK: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] |
-2023-06-17 04:44:37.070720: FMAVREVLGH: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [10, 10]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7], [9, 9]] |
-2023-06-17 04:44:37.326680: DALIDHWW: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:37.494540: QTQYN: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] |
-2023-06-17 04:44:37.548594: G: go:0000010: [[1, 1]] |
-2023-06-17 04:44:37.832618: IQLHWCAAA: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7], [9, 9]] |
-2023-06-17 04:44:37.886289: T: go:0000010: [[1, 1]] |
-2023-06-17 04:44:38.141513: TGERVTPM: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:38.280806: MITP: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:38.420804: LYDF: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:38.679136: LDGNCHFL: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:38.732383: P: go:0000010: [[1, 1]] |
-2023-06-17 04:44:38.870777: DAHF: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:39.067616: MCWDIS: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] |
-2023-06-17 04:44:39.178638: RGM: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:39.377095: NNTHNH: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] |
-2023-06-17 04:44:39.460283: ML: go:0000010: [[1, 1]] | go:0000009: [[2, 2]] |
-2023-06-17 04:44:39.714202: YYCGCHIG: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:39.882665: KVLTI: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] |
-2023-06-17 04:44:39.937105: R: go:0000010: [[1, 1]] |
-2023-06-17 04:44:40.047229: VNY: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:40.157041: LPN: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:40.410786: TKGPNDNA: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.410914: G: GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000005 GO:0000004: go:0000010: [[1, 1]] |
-2023-06-17 04:44:40.410983: QDRSMEN: GO:0000002 GO:0000009 GO:0000008 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.411062: WLQT: GO:0000009 GO:0000001 GO:0000006 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:40.411103: W: GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000005 GO:0000004: go:0000010: [[1, 1]] |
-2023-06-17 04:44:40.411150: KRD: GO:0000010 GO:0000009 GO:0000001 GO:0000006 GO:0000004: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:40.411204: EVHGMEKGMI: GO:0000002 GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4], [9, 9]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] | go:0000002: [[10, 10]] |
-2023-06-17 04:44:40.411259: HKSTVWS: GO:0000002 GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.411304: DSTILAC: GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.411364: MEQGECPLMR: GO:0000002 GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4], [9, 9]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] | go:0000002: [[10, 10]] |
-2023-06-17 04:44:40.411395: AK: GO:0000002 GO:0000010 GO:0000009 GO:0000006 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] |
-2023-06-17 04:44:40.411443: FMAVREVLGH: GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [10, 10]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7], [9, 9]] |
-2023-06-17 04:44:40.411499: DALIDHWW: GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.411542: QTQYN: GO:0000002 GO:0000009 GO:0000008 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] |
-2023-06-17 04:44:40.411565: G: GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000005 GO:0000004: go:0000010: [[1, 1]] |
-2023-06-17 04:44:40.411610: IQLHWCAAA: GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7], [9, 9]] |
-2023-06-17 04:44:40.411632: T: GO:0000010 GO:0000001 GO:0000009 GO:0000004: go:0000010: [[1, 1]] |
-2023-06-17 04:44:40.411677: TGERVTPM: GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.411711: MITP: GO:0000002 GO:0000009 GO:0000001 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:40.411742: LYDF: GO:0000010 GO:0000009 GO:0000001 GO:0000006 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:40.411786: LDGNCHFL: GO:0000002 GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.411808: P: GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000005 GO:0000004: go:0000010: [[1, 1]] |
-2023-06-17 04:44:40.411842: DAHF: GO:0000002 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] |
-2023-06-17 04:44:40.411881: MCWDIS: GO:0000002 GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] |
-2023-06-17 04:44:40.411911: RGM: GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:40.411950: NNTHNH: GO:0000010 GO:0000009 GO:0000008 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6]] |
-2023-06-17 04:44:40.411976: ML: GO:0000010 GO:0000002 GO:0000009 GO:0000008 GO:0000006 GO:0000005 GO:0000003: go:0000010: [[1, 1]] | go:0000009: [[2, 2]] |
-2023-06-17 04:44:40.412019: YYCGCHIG: GO:0000002 GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5], [8, 8]] | go:0000007: [[6, 6]] | go:0000003: [[7, 7]] |
-2023-06-17 04:44:40.412055: KVLTI: GO:0000010 GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] |
-2023-06-17 04:44:40.412077: R: GO:0000010 GO:0000009 GO:0000001 GO:0000005 GO:0000004: go:0000010: [[1, 1]] |
-2023-06-17 04:44:40.412103: VNY: GO:0000002 GO:0000001 GO:0000006 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:40.412130: LPN: GO:0000008 GO:0000001 GO:0000006 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] |
-2023-06-17 04:44:40.412173: TKGPNDNA: GO:0000009 GO:0000001 GO:0000007 GO:0000006 GO:0000005 GO:0000004 GO:0000003: go:0000006: [[1, 1]] | go:0000004: [[2, 2]] | go:0000001: [[3, 3]] | go:0000009: [[4, 4]] | go:0000005: [[5, 5]] | go:0000007: [[6, 6], [8, 8]] | go:0000003: [[7, 7]] |
+#### Molecular Function (MF)
+```bash
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --inference --device cuda --model-type gpt2 --model-path ../transprsfp_mf/ --load-go-term-index ../transprsfp_mf/go_term_index.pkl -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../datasets/mf/mf_test.pkl --max-length 1000 --compute-metrics
 ```
 
-In the output above, the script first loads and executes the classification head model. Then, the transformer model is loaded and executed. After that, the merged results are listed at the end.
+#### Cellular Component (CC)
+```bash
+$ CUDA_VISIBLE_DEVICES=0 python3 main.py --inference --device cuda --model-type gpt2 --model-path ../transprsfp_cc/ --load-go-term-index ../transprsfp_cc/go_term_index.pkl -t5 ../Rostlab_prot_t5_xl_uniref50 --dataset ../datasets/cc/cc_test.pkl --max-length 1000 --compute-metrics
+```
 
 ## References
+ - Ulusoy E, Doğan T. Mutual annotation-based prediction of protein domain functions with Domain2GO. Protein Sci. 2024 Jun;33(6):e4988. doi: 10.1002/pro.4988. PMID: 38757367; PMCID: PMC11099699.
+ - Ünlü, A., & Çevrim, E., & Doğan, T. (2024). Prot2Mol: Target based molecule generation using protein embeddings and SELFIES molecule representation. GitHub. https://github.com/HUBioDataLab/Prot2Mol
  - https://www.youtube.com/watch?v=U0s0f995w14
  - https://towardsdatascience.com/a-detailed-guide-to-pytorchs-nn-transformer-module-c80afbc9ffb1
  - https://medium.com/the-dl/transformers-from-scratch-in-pytorch-8777e346ca51
  - https://towardsdatascience.com/how-to-code-the-transformer-in-pytorch-24db27c8f9ec
-
-## Our Website
-You can access our website [here](https://proteinfunctionprediction.com)
